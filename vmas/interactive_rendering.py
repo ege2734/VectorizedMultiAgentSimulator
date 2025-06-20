@@ -17,7 +17,6 @@ from typing import Dict, Union
 
 import numpy as np
 from torch import Tensor
-
 from vmas.make_env import make_env
 from vmas.simulator.environment.gym import GymWrapper
 from vmas.simulator.scenario import BaseScenario
@@ -354,9 +353,9 @@ def render_interactively(
         control_two_agents=control_two_agents,
         display_info=display_info,
         save_render=save_render,
-        render_name=f"{scenario}_interactive"
-        if isinstance(scenario, str)
-        else "interactive",
+        render_name=(
+            f"{scenario}_interactive" if isinstance(scenario, str) else "interactive"
+        ),
     )
 
 
