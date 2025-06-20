@@ -13,7 +13,7 @@ and switch the agent with these controls using LSHIFT
 
 from argparse import ArgumentParser, BooleanOptionalAction
 from operator import add
-from typing import Dict, Union
+from typing import Dict, Tuple, Union
 
 import numpy as np
 from torch import Tensor
@@ -43,6 +43,7 @@ class InteractiveEnv:
         display_info: bool = True,
         save_render: bool = False,
         render_name: str = "interactive",
+        obs_labels: list[Tuple[str, int]] = [],
     ):
         self.env = env
         self.control_two_agents = control_two_agents
@@ -65,6 +66,7 @@ class InteractiveEnv:
         self.display_info = display_info
         self.save_render = save_render
         self.render_name = render_name
+        self.obs_labels = obs_labels
 
         if self.control_two_agents:
             assert (
@@ -122,7 +124,7 @@ class InteractiveEnv:
 
             if self.display_info and self.n_agents > 0:
                 # TODO: Determine number of lines of obs_str and render accordingly
-                obs_str = str(InteractiveEnv.format_obs(obs[self.current_agent_index]))
+                obs_str = str(self.format_obs(obs[self.current_agent_index]))
                 message = f"\t\t{obs_str[len(obs_str) // 2:]}"
                 self._write_values(0, message)
                 message = f"Obs: {obs_str[:len(obs_str) // 2]}"
@@ -291,12 +293,24 @@ class InteractiveEnv:
             else:
                 self.u2[1] = 0
 
-    @staticmethod
-    def format_obs(obs):
+    def format_obs(self, obs):
         if isinstance(obs, (Tensor, np.ndarray)):
-            return list(np.around(obs.tolist(), decimals=2))
+            l = np.around(obs.tolist(), decimals=2).tolist()
+            full_str = ""
+            cur_idx = 0
+            for label, idx in self.obs_labels:
+                vals = []
+                for i in range(idx):
+                    vals.append(l[cur_idx + i])
+                full_str += f"{label}: {vals}\n"
+                cur_idx += idx
+
+            if len(l) > cur_idx:
+                full_str += f"Other: {l[cur_idx:]}\n"
+            print(full_str)
+            return full_str
         elif isinstance(obs, Dict):
-            return {key: InteractiveEnv.format_obs(value) for key, value in obs.items()}
+            return {key: self.format_obs(value) for key, value in obs.items()}
         else:
             raise NotImplementedError(f"Invalid type of observation {obs}")
 
@@ -306,6 +320,7 @@ def render_interactively(
     control_two_agents: bool = False,
     display_info: bool = True,
     save_render: bool = False,
+    obs_labels: list[Tuple[str, int]] = [],
     **kwargs,
 ):
     """Executes a scenario and renders it so that you can debug and control agents interactively.
@@ -356,6 +371,7 @@ def render_interactively(
         render_name=(
             f"{scenario}_interactive" if isinstance(scenario, str) else "interactive"
         ),
+        obs_labels=obs_labels,
     )
 
 
