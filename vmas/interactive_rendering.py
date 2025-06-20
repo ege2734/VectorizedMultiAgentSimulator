@@ -22,7 +22,7 @@ from vmas.simulator.environment.gym import GymWrapper
 from vmas.simulator.scenario import BaseScenario
 from vmas.simulator.utils import save_video
 
-N_TEXT_LINES_INTERACTIVE = 6
+N_TEXT_LINES_INTERACTIVE = 10
 
 
 class InteractiveEnv:
@@ -122,26 +122,48 @@ class InteractiveEnv:
 
             obs, rew, done, info = self.env.step(action_list)
 
+            write_idx = 0
             if self.display_info and self.n_agents > 0:
-                # TODO: Determine number of lines of obs_str and render accordingly
-                obs_str = str(self.format_obs(obs[self.current_agent_index]))
-                message = f"\t\t{obs_str[len(obs_str) // 2:]}"
-                self._write_values(0, message)
-                message = f"Obs: {obs_str[:len(obs_str) // 2]}"
-                self._write_values(1, message)
+                raw_obs = self.format_obs(obs[self.current_agent_index])
+                # Remember: self._write_values writes stuff starting at the bottom.
+                if isinstance(raw_obs, list):
+                    for obs_line in reversed(raw_obs):
+                        if isinstance(obs_line, tuple):
+                            label, vals = obs_line
+                            message = f"{label}: {vals}"
+                        else:
+                            assert isinstance(obs_line, list)
+                            message = f"{obs_line}"
+                        self._write_values(write_idx, message)
+                        write_idx += 1
+                    self._write_values(write_idx, "Obs:")
+                    write_idx += 1
+                else:
+                    assert isinstance(raw_obs, dict)
+                    obs_str = str(self.format_obs(obs[self.current_agent_index]))
+                    message = f"\t\t{obs_str[len(obs_str) // 2:]}"
+                    self._write_values(write_idx, message)
+                    write_idx += 1
+                    message = f"Obs: {obs_str[:len(obs_str) // 2]}"
+                    self._write_values(write_idx, message)
+                    write_idx += 1
 
                 message = f"Rew: {round(rew[self.current_agent_index],3)}"
-                self._write_values(2, message)
+                self._write_values(write_idx, message)
+                write_idx += 1
 
                 total_rew = list(map(add, total_rew, rew))
                 message = f"Total rew: {round(total_rew[self.current_agent_index], 3)}"
-                self._write_values(3, message)
+                self._write_values(write_idx, message)
+                write_idx += 1
 
                 message = f"Done: {done}"
-                self._write_values(4, message)
+                self._write_values(write_idx, message)
+                write_idx += 1
 
                 message = f"Selected: {self.env.unwrapped.agents[self.current_agent_index].name}"
-                self._write_values(5, message)
+                self._write_values(write_idx, message)
+                write_idx += 1
 
             frame = self.env.render(
                 mode="rgb_array" if self.save_render else "human",
@@ -296,19 +318,21 @@ class InteractiveEnv:
     def format_obs(self, obs):
         if isinstance(obs, (Tensor, np.ndarray)):
             l = np.around(obs.tolist(), decimals=2).tolist()
-            full_str = ""
+            if len(self.obs_labels) == 0:
+                return l
+            labeled_obs: list[Tuple[str, list[float]]] = []
+
             cur_idx = 0
             for label, idx in self.obs_labels:
                 vals = []
                 for i in range(idx):
                     vals.append(l[cur_idx + i])
-                full_str += f"{label}: {vals}\n"
+                labeled_obs.append((label, vals))
                 cur_idx += idx
 
             if len(l) > cur_idx:
-                full_str += f"Other: {l[cur_idx:]}\n"
-            print(full_str)
-            return full_str
+                labeled_obs.append(("Other", l[cur_idx:]))
+            return labeled_obs
         elif isinstance(obs, Dict):
             return {key: self.format_obs(value) for key, value in obs.items()}
         else:
